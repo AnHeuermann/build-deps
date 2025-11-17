@@ -1,6 +1,16 @@
 FROM ubuntu:jammy
 
+# Image / OCI metadata
+LABEL maintainer="AnHeuermann"
+LABEL description="OpenModelica build-deps Docker Image "
+LABEL organization="OpenModelica"
+
+LABEL org.opencontainers.image.vendor="OpenModelica"
 LABEL org.opencontainers.image.authors="AnHeuermann"
+LABEL org.opencontainers.image.version="v1.22.0"
+LABEL org.opencontainers.image.description="OpenModelica build-deps Docker Image "
+LABEL org.opencontainers.image.source="https://github.com/OpenModelica/build-deps"
+LABEL org.opencontainers.image.license="MIT"
 
 ENV SHELL=/bin/bash
 
