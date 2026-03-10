@@ -2,13 +2,13 @@ FROM ubuntu:noble
 
 # Image / OCI metadata
 LABEL maintainer="AnHeuermann"
-LABEL description="OpenModelica build-deps Docker Image "
+LABEL description="OpenModelica build-deps Docker Image with CMake v4"
 LABEL organization="OpenModelica"
 
 LABEL org.opencontainers.image.vendor="OpenModelica"
 LABEL org.opencontainers.image.authors="AnHeuermann"
-LABEL org.opencontainers.image.version="v1.26.0"
-LABEL org.opencontainers.image.description="OpenModelica build-deps Docker Image "
+LABEL org.opencontainers.image.version="v1.26.1-cmake4"
+LABEL org.opencontainers.image.description="OpenModelica build-deps Docker Image"
 LABEL org.opencontainers.image.source="https://github.com/OpenModelica/build-deps"
 LABEL org.opencontainers.image.license="MIT"
 
@@ -92,6 +92,14 @@ RUN apt-get update                                                             \
     zip                                                                        \
   && apt-get clean                                                             \
   && rm -rf /var/lib/apt/lists/*
+
+# Install CMake from official Kitware release (overrides any apt-provided cmake)
+ARG CMAKE_VERSION=4.2.3
+RUN curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).sh" \
+      -o /tmp/cmake-install.sh                                                 \
+  && chmod +x /tmp/cmake-install.sh                                            \
+  && /tmp/cmake-install.sh --skip-license --prefix=/usr/local                  \
+  && rm /tmp/cmake-install.sh
 
 # Install Python packages in a default virtual environment
 # Use permalink for doc/UsersGuide/source/requirements.txt to keep builds
