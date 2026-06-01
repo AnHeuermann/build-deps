@@ -23,8 +23,8 @@ When creating a release form a tag the
   - [releases/v1.26-cmake4](https://github.com/OpenModelica/build-deps/tree/releases/v1.26-cmake4)
 - 22.04 Jammy:
   - [releases/v1.22](https://github.com/OpenModelica/build-deps/tree/releases/v1.22)
-  - [releases/v1.22-qtwebengine](https://github.com/OpenModelica/build-deps/tree/releases/v1.22-qtwebengine)
-  - [releases/v1.24-qt5qt6](https://github.com/OpenModelica/build-deps/tree/releases/v1.22-qtwebengine)
+  - [releases/v1.22-qtwebengine](https://github.com/OpenModelica/build-deps/tree/releases/v1.22-qtwebengine), replaced by [releases/v1.22](https://github.com/OpenModelica/build-deps/tree/releases/v1.22) v1.22.3 or higher
+  - [releases/v1.24-qt5qt6](https://github.com/OpenModelica/build-deps/tree/releases/v1.22-qtwebengine), replaced by [releases/v1.22](https://github.com/OpenModelica/build-deps/tree/releases/v1.22) v1.22.3 or higher
 - 20.04 Focal: [releases/v1.21](https://github.com/OpenModelica/build-deps/tree/releases/v1.21)
 - 18.04 Bionic + cmake: [releases/v1.16-cmake](https://github.com/OpenModelica/build-deps/tree/releases/v1.16-cmake)
 - 18.04 Bionic: [releases/v1.16](https://github.com/OpenModelica/build-deps/tree/releases/v1.16)
@@ -51,6 +51,7 @@ The [publish.yml](./.github/workflows/publish.yml) workflow will build, sign and
 upload the Docker image to
 [GitHub Container registry](https://github.com/OpenModelica/openmodelica-build-deps/pkgs/container/build-deps)
 for each release.
+The [publish-nexus](./.github/workflows/publish-nexus.yml) workflow will build and upload the Docker image to [docker.openmodelica.org](https://nexus.openmodelica.org/#browse/browse:openmodelica:v2%2Fbuild-deps)
 
 ## License
 
