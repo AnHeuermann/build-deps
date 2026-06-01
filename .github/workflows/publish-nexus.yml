@@ -4,6 +4,10 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to publish (e.g. v1.22.3)'
+        required: true
 
 permissions:
   contents: read
@@ -29,6 +33,9 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: docker.openmodelica.org/build-deps
+          tags: |
+            type=ref,event=tag
+            type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
