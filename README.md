@@ -31,8 +31,8 @@ When creating a release form a tag the
 
 ### Debian based Images
 
-- 12 Bookworm
-- 11 Bullseye
+- 13 Trixie
+  - [releases/debian/trixie/nightly](https://github.com/OpenModelica/build-deps/tree/releases/debian/trixie/nightly)
 
 ### CentOS based Images
 
@@ -41,7 +41,7 @@ When creating a release form a tag the
 ## Build
 
 ```bash
-export TAG=v1.26.1
+export TAG=trixie.nightly.amd64
 docker build --pull --no-cache --tag build-deps:$TAG .
 ```
 
