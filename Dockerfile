@@ -17,7 +17,7 @@ ENV SHELL=/bin/bash
 # Ensure DEBIAN_FRONTEND is only set during build
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Install build-deps of OpenModelica
+# Install OpenModelica GPG key
 RUN apt-get update                                                                                                                          \
   && apt-get upgrade -qy                                                                                                                    \
   && apt-get dist-upgrade -qy                                                                                                               \
@@ -35,45 +35,49 @@ RUN apt-get update                                                              
     "deb-src [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openmodelica-keyring.gpg] https://build.openmodelica.org/apt  \
     $(cat /etc/os-release | grep "\(UBUNTU\\|DEBIAN\\|VERSION\)_CODENAME" | sort | cut -d= -f 2 | head -1)                                  \
     nightly" | tee -a /etc/apt/sources.list.d/openmodelica.list > /dev/null                                                                 \
-  && apt-get update                                                                                                                         \
-  && apt-get build-dep -qy openmodelica
+  && apt-get update
+
+# Install Debian build deps
+RUN apt-get install -qy                                                                                                                   \
+    wget                                                                                                                                  \
+    devscripts                                                                                                                            \
+    equivs                                                                                                                                \
+  && wget https://raw.githubusercontent.com/OpenModelica/OpenModelicaBuildScripts/37b564c1674023a5afb7517e408ffd9bd174a59c/debian/control \
+  && mk-build-deps --install -t 'apt-get --force-yes -y' control
 
 # Install additional dependencies, e.g. to build the User's Guide
-RUN apt-get install -qy \
-  aspell                \
-  bibtex2html           \
-  bison                 \
-  ccache                \
-  clang-tools           \
-  devscripts            \
-  docker.io             \
-  doxygen               \
-  equivs                \
-  flex                  \
-  git                   \
-  gnuplot-nox           \
-  inkscape              \
-  intel-opencl-icd      \
-  latexmk               \
-  libcurl4-gnutls-dev   \
-  libmldbm-perl         \
-  ocl-icd-opencl-dev    \
-  opencl-headers        \
-  pandoc                \
-  pocl-opencl-icd       \
-  poppler-utils         \
-  python3-pip           \
-  qttools5-dev          \
-  qtwebengine5-dev      \
-  subversion            \
-  texlive-base          \
-  texlive-bibtex-extra  \
-  texlive-lang-greek    \
-  texlive-latex-extra   \
-  unzip                 \
-  wget                  \
-  xsltproc              \
-  xvfb                  \
+RUN apt-get install -qy                                                        \
+  aspell                                                                       \
+  bibtex2html                                                                  \
+  bison                                                                        \
+  ccache                                                                       \
+  clang-tools                                                                  \
+  docker.io                                                                    \
+  doxygen                                                                      \
+  flex                                                                         \
+  git                                                                          \
+  gnuplot-nox                                                                  \
+  inkscape                                                                     \
+  intel-opencl-icd                                                             \
+  latexmk                                                                      \
+  libcurl4-gnutls-dev                                                          \
+  libmldbm-perl                                                                \
+  ocl-icd-opencl-dev                                                           \
+  opencl-headers                                                               \
+  pandoc                                                                       \
+  pocl-opencl-icd                                                              \
+  poppler-utils                                                                \
+  python3-pip                                                                  \
+  qttools5-dev                                                                 \
+  qtwebengine5-dev                                                             \
+  subversion                                                                   \
+  texlive-base                                                                 \
+  texlive-bibtex-extra                                                         \
+  texlive-lang-greek                                                           \
+  texlive-latex-extra                                                          \
+  unzip                                                                        \
+  xsltproc                                                                     \
+  xvfb                                                                         \
   zip
 
 # Qt6 tools
@@ -160,13 +164,15 @@ RUN apt-get install -qy                                                        \
   qt6-webview-dev                                                              \
   qt6-webview-plugins
 
-RUN wget https://raw.githubusercontent.com/OpenModelica/OpenModelicaBuildScripts/master/debian/control \
-  && mk-build-deps --install -t 'apt-get --force-yes -y' control
-
 # Python packages
-RUN wget https://raw.githubusercontent.com/OpenModelica/OpenModelica/master/doc/UsersGuide/source/requirements.txt \
-  && pip3 install --no-cache-dir --upgrade -r requirements.txt \
-  && pip3 install --no-cache-dir --upgrade junit_xml simplejson svgwrite PyGithub
+RUN pip3 install --no-cache-dir                                                \
+    junit_xml                                                                  \
+    ompython==3.6.0                                                            \
+    PyGithub                                                                   \
+    simplejson                                                                 \
+    svgwrite                                                                   \
+  && pip3 install --no-cache-dir -r                                            \
+    https://raw.githubusercontent.com/OpenModelica/OpenModelica/9c0dc9a8ab50ba652109584cb3fecaef86640b66/doc/UsersGuide/source/requirements.txt
 
 # Set locale
 ENV LANGUAGE=en_US:en
@@ -177,5 +183,5 @@ RUN apt-get install -qy locales
 # Clean
 RUN rm -rf /var/lib/apt/lists/* \
   && apt-get clean \
-  && rm -f control requirements.txt *.deb \
+  && rm -f control *.deb \
   && rm /openmodelica-build-deps_1.0_amd64.buildinfo /openmodelica-build-deps_1.0_amd64.changes
