@@ -7,7 +7,7 @@ LABEL organization="OpenModelica"
 
 LABEL org.opencontainers.image.vendor="OpenModelica"
 LABEL org.opencontainers.image.authors="AnHeuermann"
-LABEL org.opencontainers.image.version="v1.22.3"
+LABEL org.opencontainers.image.version="v1.22.4"
 LABEL org.opencontainers.image.description="OpenModelica build-deps Docker Image "
 LABEL org.opencontainers.image.source="https://github.com/OpenModelica/build-deps"
 LABEL org.opencontainers.image.license="MIT"
@@ -167,7 +167,7 @@ RUN apt-get install -qy                                                        \
 # Python packages
 RUN pip3 install --no-cache-dir                                                \
     junit_xml                                                                  \
-    ompython==3.6.0                                                            \
+    ompython==4.0.1                                                            \
     PyGithub                                                                   \
     simplejson                                                                 \
     svgwrite                                                                   \
