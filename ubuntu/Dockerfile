@@ -5,9 +5,10 @@
 #
 # Stages / build targets:
 #   base     OpenModelica build dependencies only (apt build-dep openmodelica)
-#   venv     Python virtualenv at /opt/venv, built in isolation and copied later
-#   full     the published BASE image: base + User's Guide toolchain + Qt + venv
+#   python   Python virtualenv at /opt/venv, built in isolation and copied later
+#   full     the published BASE image: base + User's Guide toolchain + Qt + python
 #   cmake-4  ADD-ON: full + CMake 4 from the official Kitware release
+#   debug    ADD-ON: full + GDB, Valgrind, and other debugging tools
 #
 # Build the base image (the `full` target):
 #   docker build --target full --build-arg UBUNTU_VERSION=24.04 \
@@ -16,6 +17,10 @@
 # Build the CMake 4 add-on image (the `cmake-4` target):
 #   docker build --target cmake-4 --build-arg UBUNTU_VERSION=24.04 \
 #     --tag build-deps:ubuntu-24.04-cmake-4 ubuntu
+#
+# Build the debug add-on image (the `debug` target):
+#   docker build --target debug --build-arg UBUNTU_VERSION=24.04 \
+#     --tag build-deps:ubuntu-24.04-debug ubuntu
 #
 # CI passes UBUNTU_VERSION and the --target per image from .ci/matrix.yml.
 
@@ -66,7 +71,7 @@ RUN apt-get update \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-# ── venv: Python tooling, isolated so it caches independently ─────────
+# ── venv: Python tooling, isolated so it caches independently ─────────────────
 # Built once and copied into `full`. Uses the same python3 as `full` (same
 # Ubuntu base), so the relocated /opt/venv works there unchanged.
 FROM base AS venv
@@ -177,3 +182,17 @@ RUN curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERS
   && chmod +x /tmp/cmake-install.sh \
   && /tmp/cmake-install.sh --skip-license --prefix=/usr/local \
   && rm /tmp/cmake-install.sh
+
+# ── debug add-on: full + GDB, Valgrind, and other debugging tools ─────────────
+# Overrides nothing in full; adds debuggers and profilers on top.
+# Built with `--target debug`.
+FROM full AS debug
+LABEL org.opencontainers.image.description="OpenModelica build-deps (Ubuntu) with debug tools"
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get install -qy \
+    gdb \
+    linux-tools-generic \
+    valgrind \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*

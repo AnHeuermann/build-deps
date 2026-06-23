@@ -20,14 +20,14 @@ than by OpenModelica version. Each image is a **base** plus optional, layered
 ```text
 main
 ├── ubuntu/
-│   └── Dockerfile                        # multi-stage: ALL Ubuntu versions + add-ons
-├── debian/Dockerfile                     # placeholder (not implemented yet)
-├── almalinux/Dockerfile                  # placeholder (not implemented yet)
-├── arch/Dockerfile                       # placeholder (not implemented yet)
+│   └── Dockerfile          # multi-stage: ALL Ubuntu versions + add-ons
+├── debian/Dockerfile       # placeholder (not implemented yet)
+├── almalinux/Dockerfile    # placeholder (not implemented yet)
+├── arch/Dockerfile         # placeholder (not implemented yet)
 └── .ci/
-    ├── matrix.yml                        # source of truth: which images exist
-    ├── matrix.py                         # matrix.yml -> CI matrix / tag lookup
-    └── publish.sh                        # build + push one image (base + add-ons)
+    ├── matrix.yml          # source of truth: which images exist
+    ├── matrix.py           # matrix.yml -> CI matrix / tag lookup
+    └── publish.sh          # build + push one image (base + add-ons)
 ```
 
 > **Status:** only the **Ubuntu** images are implemented. Debian, AlmaLinux and
@@ -121,8 +121,8 @@ docker build --pull \
 ## CI workflow
 
 A single workflow, [build.yml][workflow-build-file], runs the whole pipeline so
-that a release it creates can publish in the **same** run (a release created with
-`GITHUB_TOKEN` cannot trigger a separate workflow):
+that a release it creates can publish in the **same** run (a release created
+with `GITHUB_TOKEN` cannot trigger a separate workflow):
 
 ```text
 discover ─▶ build (all images, no push)
