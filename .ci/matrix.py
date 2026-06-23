@@ -2,7 +2,7 @@
 """Helpers for the CI.
 
 Reads ``.ci/matrix.yml`` (the single source of truth for which images exist)
-and answers two questions for the GitHub Actions workflows:
+and answers questions for the GitHub Actions workflows:
 
     matrix.py all
         Print, on one line, a JSON array of every image. Used as the
@@ -32,6 +32,13 @@ and answers two questions for the GitHub Actions workflows:
             addons='cmake-4'
 
         Intended to be consumed with ``eval "$(python .ci/matrix.py image …)"``.
+
+    matrix.py publish-matrix <date>
+        Print, on one line, a JSON array of ``{"tag": "<base_tag>-<date>"}``
+        objects for every image in the matrix. Used by the scheduled workflow
+        to build the publish job matrix with date-stamped immutable tags::
+
+            [{"tag":"ubuntu-24.04-2026.06.23"},{"tag":"ubuntu-22.04-2026.06.23"}]
 """
 
 from __future__ import annotations
@@ -86,6 +93,12 @@ def cmd_all():
     print(json.dumps(load_images(), separators=(",", ":")))
 
 
+def cmd_publish_matrix(date: str):
+    images = load_images()
+    result = [{"tag": f"{img['base_tag']}-{date}"} for img in images]
+    print(json.dumps(result, separators=(",", ":")))
+
+
 def cmd_image(tag: str):
     match = SEMVER_RE.match(tag)
     if not match:
@@ -120,8 +133,10 @@ def main(argv):
         cmd_all()
     elif len(argv) >= 3 and argv[1] == "image":
         cmd_image(argv[2])
+    elif len(argv) >= 3 and argv[1] == "publish-matrix":
+        cmd_publish_matrix(argv[2])
     else:
-        sys.exit(f"usage: {argv[0]} all | image <tag>")
+        sys.exit(f"usage: {argv[0]} all | image <tag> | publish-matrix <date>")
 
 
 if __name__ == "__main__":

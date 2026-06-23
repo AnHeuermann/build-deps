@@ -86,6 +86,7 @@ release needs a frozen environment it pins the **immutable** tag.
 | Debian 13 (Trixie) | `debian-13` | – | placeholder | [debian/Dockerfile][debian-dockerfile] |
 | AlmaLinux 9 | `almalinux-9` | – | placeholder | [almalinux/Dockerfile][almalinux-dockerfile] |
 | Arch Linux (rolling) | `arch-rolling` | – | placeholder | [arch/Dockerfile][arch-dockerfile] |
+| openSUSE Leap 16.0 | `opensuse-leap-16.0` | – | placeholder | [opensuse-leap/Dockerfile][opensuse-leap-dockerfile] |
 
 ## Build locally
 
@@ -155,6 +156,7 @@ See [LICENSE.md][license-md].
 [debian-dockerfile]: ./debian/Dockerfile
 [almalinux-dockerfile]: ./almalinux/Dockerfile
 [arch-dockerfile]: ./arch/Dockerfile
+[opensuse-leap-dockerfile]: ./opensuse-leap/Dockerfile
 [workflow-build-file]: ./.github/workflows/build.yml
 [releasing-md]: ./RELEASING.md
 [build-scripts]: https://github.com/OpenModelica/OpenModelicaBuildScripts

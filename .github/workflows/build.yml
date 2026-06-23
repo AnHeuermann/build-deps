@@ -8,8 +8,18 @@ name: Build, Release & Publish
 #
 # Release/publish are keyed on image tags: <os>-<version>-<semver>,
 # e.g. ubuntu-24.04-2.1.0.
+#
+# Triggers:
+#   schedule        Weekly rolling rebuild (Sunday night → Monday 00:00 UTC).
+#                   Publishes every image with a date-based immutable tag
+#                   (YYYY.MM.DD) in addition to the moving tag, without creating
+#                   a GitHub Release.
+#   push tag        Full release: GitHub Release + immutable semver tag.
+#   workflow_dispatch Re-publish a single image tag on demand.
 
 on:
+  schedule:
+    - cron: '0 0 * * 1'   # Monday 00:00 UTC — Sunday-night rolling rebuild
   push:
     branches:
       - main
@@ -33,6 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}
+      publish_matrix: ${{ steps.publish_tags.outputs.matrix }}
     steps:
       - name: Check out the repo
         uses: actions/checkout@v7
@@ -43,6 +54,29 @@ jobs:
       - name: Compute build matrix
         id: set
         run: echo "matrix=$(python .ci/matrix.py all)" >> "$GITHUB_OUTPUT"
+
+      - name: Compute publish matrix
+        id: publish_tags
+        run: |
+          case "${{ github.event_name }}" in
+            schedule)
+              DATE=$(date +%Y.%m.%d)
+              echo "matrix=$(python3 .ci/matrix.py publish-matrix "${DATE}")" >> "$GITHUB_OUTPUT"
+              ;;
+            workflow_dispatch)
+              echo 'matrix=[{"tag":"${{ github.event.inputs.tag }}"}]' >> "$GITHUB_OUTPUT"
+              ;;
+            push)
+              if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+                echo 'matrix=[{"tag":"${{ github.ref_name }}"}]' >> "$GITHUB_OUTPUT"
+              else
+                echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            *)
+              echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
   build:
     name: Build ${{ matrix.image.os }}-${{ matrix.image.version }}
@@ -135,24 +169,28 @@ jobs:
           fi
 
   publish-ghcr:
-    name: Publish to GHCR
-    needs: [build, release]
-    # Runs on a release tag (after release succeeds) or on a manual re-publish
-    # dispatch (where the release job is skipped).
+    name: Publish ${{ matrix.image.tag }} to GHCR
+    needs: [discover, build, release]
+    # Runs on: a release tag, a manual re-publish dispatch, or the weekly schedule.
+    # publish_matrix is [] for PR and branch-push runs, so those are excluded.
     if: >-
       ${{ always()
         && needs.build.result == 'success'
         && (needs.release.result == 'success' || needs.release.result == 'skipped')
-        && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
+        && needs.discover.outputs.publish_matrix != '[]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
       contents: read
       packages: write
       id-token: write # needed for signing the images with GitHub OIDC Token
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.discover.outputs.publish_matrix) }}
     env:
       REGISTRY: ghcr.io/openmodelica/build-deps
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      TAG: ${{ matrix.image.tag }}
     steps:
       - name: Check out the repo
         uses: actions/checkout@v7
@@ -197,20 +235,24 @@ jobs:
           done
 
   publish-nexus:
-    name: Publish to Nexus
-    needs: [build, release]
+    name: Publish ${{ matrix.image.tag }} to Nexus
+    needs: [discover, build, release]
     if: >-
       ${{ always()
         && needs.build.result == 'success'
         && (needs.release.result == 'success' || needs.release.result == 'skipped')
-        && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
+        && needs.discover.outputs.publish_matrix != '[]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.discover.outputs.publish_matrix) }}
     env:
       REGISTRY: docker.openmodelica.org/build-deps
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      TAG: ${{ matrix.image.tag }}
     steps:
       - name: Check out the repo
         uses: actions/checkout@v7

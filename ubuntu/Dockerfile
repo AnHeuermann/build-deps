@@ -11,20 +11,20 @@
 #   debug    ADD-ON: full + GDB, Valgrind, and other debugging tools
 #
 # Build the base image (the `full` target):
-#   docker build --target full --build-arg UBUNTU_VERSION=24.04 \
-#     --tag build-deps:ubuntu-24.04 ubuntu
+#   docker build --target full --build-arg UBUNTU_VERSION=26.04 \
+#     --tag build-deps:ubuntu-26.04 ubuntu
 #
 # Build the CMake 4 add-on image (the `cmake-4` target):
-#   docker build --target cmake-4 --build-arg UBUNTU_VERSION=24.04 \
-#     --tag build-deps:ubuntu-24.04-cmake-4 ubuntu
+#   docker build --target cmake-4 --build-arg UBUNTU_VERSION=26.04 \
+#     --tag build-deps:ubuntu-26.04-cmake-4 ubuntu
 #
 # Build the debug add-on image (the `debug` target):
-#   docker build --target debug --build-arg UBUNTU_VERSION=24.04 \
-#     --tag build-deps:ubuntu-24.04-debug ubuntu
+#   docker build --target debug --build-arg UBUNTU_VERSION=26.04 \
+#     --tag build-deps:ubuntu-26.04-debug ubuntu
 #
 # CI passes UBUNTU_VERSION and the --target per image from .ci/matrix.yml.
 
-ARG UBUNTU_VERSION=24.04
+ARG UBUNTU_VERSION=26.04
 
 # ── base: OpenModelica build dependencies only ────────────────────────────────
 FROM ubuntu:${UBUNTU_VERSION} AS base
@@ -100,9 +100,9 @@ FROM base AS full
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Package lists as build-args, so they are easy to read and to override:
-#   - COMMON_PKGS   : tools common to all Ubuntu versions (User's Guide, …)
-#   - QT_PKGS_22_04 : Qt set for Jammy (older Qt6, lacks some 24.04+ packages)
-#   - QT_PKGS       : Qt set for 24.04+ (the default)
+#   - COMMON_PKGS      : tools common to all Ubuntu versions (User's Guide, …)
+#   - QT_PKGS_22_04    : Qt set for Jammy (older Qt6, lacks some 24.04+ packages)
+#   - QT_PKGS          : Qt set for 24.04+ (the default)
 ARG COMMON_PKGS="\
     aspell \
     bibtex2html \
@@ -140,9 +140,16 @@ ARG COMMON_PKGS="\
     xvfb \
     zip"
 ARG QT_PKGS_22_04="\
+    libqt6core5compat6-dev \
+    libqt6opengl6-dev \
+    libqt6openglwidgets6 \
+    libqt6svg6-dev \
     qt6-base-dev \
+    qt6-l10n-tools \
     qt6-tools-dev \
     qt6-tools-dev-tools \
+    qt6-webengine-dev \
+    qt6-webengine-dev-tools \
     qttools5-dev \
     qtwebengine5-dev"
 ARG QT_PKGS="\
@@ -175,8 +182,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 # ── cmake-4 add-on: full + CMake 4 from the official Kitware release ──────────
 # Overrides any apt-provided cmake. Built with `--target cmake-4`.
 FROM full AS cmake-4
-LABEL org.opencontainers.image.description="OpenModelica build-deps (Ubuntu) with CMake 4"
-ARG CMAKE_VERSION=4.2.3
+LABEL org.opencontainers.image.description="OpenModelica build-deps (Ubuntu) with latest CMake 4"
+ARG CMAKE_VERSION=4.3.4
 RUN curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).sh" \
       -o /tmp/cmake-install.sh \
   && chmod +x /tmp/cmake-install.sh \

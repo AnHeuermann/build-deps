@@ -85,3 +85,12 @@ images:
   #   dockerfile: arch/Dockerfile
   #   target: full
   #   addons: []
+  #
+  # - os: opensuse-leap
+  #   version: "16.0"
+  #   context: opensuse-leap
+  #   dockerfile: opensuse-leap/Dockerfile
+  #   target: full
+  #   build_args:
+  #     LEAP_VERSION: "16.0"
+  #   addons: []
