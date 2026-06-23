@@ -9,7 +9,7 @@ driven entirely by **git tags**; you never push images by hand.
 
 ## The tag grammar
 
-```
+```text
 <os>-<os-version>-<semver>
 ```
 
@@ -20,7 +20,7 @@ driven entirely by **git tags**; you never push images by hand.
 | `<semver>` | `2.1.0` | **This repository's** version (the recipe), independent of OpenModelica. `MAJOR.MINOR.PATCH`. |
 
 The pair `<os>-<os-version>` must match an entry in
-[.ci/matrix.yml](./.ci/matrix.yml) (you can list valid prefixes with
+[.ci/matrix.yml][ci-matrix] (you can list valid prefixes with
 `python .ci/matrix.py all`).
 
 ### What gets published
@@ -56,9 +56,9 @@ Each image has its **own** semver line; bumping `ubuntu-24.04` does not affect
    `<os>/Dockerfile` (e.g. all Ubuntu versions share `ubuntu/Dockerfile`) where
    the base is the `full` stage and add-ons are extra stages such as `cmake-4`.
    Its `context`/`dockerfile`/`target`/`build_args` are in
-   [.ci/matrix.yml](./.ci/matrix.yml).
+   [.ci/matrix.yml][ci-matrix].
 
-2. **Open a PR to `main`.** [build.yml](./.github/workflows/build.yml) builds
+2. **Open a PR to `main`.** [build.yml][build-yml] builds
    every image (no push). Confirm your image builds. Build it locally too —
    reuse the `context` / `dockerfile` / `target` / `build_args` from
    `.ci/matrix.yml`:
@@ -130,3 +130,6 @@ latest build. For a reproducible pin, release with a date-stamped semver-like
 tag, e.g. `arch-rolling-2026.06.01` — but note the publish workflows expect a
 `MAJOR.MINOR.PATCH` semver suffix, so use `YYYY.MM.DD` (which is valid semver)
 as the `<semver>` component.
+
+[ci-matrix]: ./.ci/matrix.yml
+[build-yml]: ./.github/workflows/build.yml

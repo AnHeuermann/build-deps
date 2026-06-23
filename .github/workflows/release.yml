@@ -1,0 +1,37 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      # Image release tags: <os>-<version>-<semver>, e.g. ubuntu-24.04-2.1.0
+      - '*-*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Per-image releases are never marked as the repository "latest":
+          # there is no single newest image in the monorepo.
+          if gh release view "${{ github.ref_name }}" &>/dev/null; then
+            gh release edit "${{ github.ref_name }}" \
+              --title "${{ github.ref_name }}" \
+              --generate-notes \
+              --latest=false
+          else
+            gh release create "${{ github.ref_name }}" \
+              --title "${{ github.ref_name }}" \
+              --generate-notes \
+              --verify-tag \
+              --latest=false
+          fi

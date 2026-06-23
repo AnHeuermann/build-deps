@@ -1,8 +1,7 @@
 name: Build, Release & Publish
 
 # Single pipeline so a release created here can trigger publishing in the SAME
-# run. (A GitHub Release created with GITHUB_TOKEN does NOT trigger other
-# workflows, which is why release + publish must live together.)
+# run.
 #
 #   discover ─▶ build (all images, no push)
 #                 └─▶ release (tag only) ─▶ publish-ghcr + publish-nexus
@@ -36,7 +35,7 @@ jobs:
       matrix: ${{ steps.set.outputs.matrix }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
 
       - name: Install dependencies
         run: pip install pyyaml
@@ -56,7 +55,7 @@ jobs:
         image: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -109,7 +108,7 @@ jobs:
       contents: write
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
 
       - name: Create or update release
         env:
@@ -151,7 +150,7 @@ jobs:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -209,7 +208,7 @@ jobs:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

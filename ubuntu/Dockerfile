@@ -21,7 +21,7 @@
 
 ARG UBUNTU_VERSION=24.04
 
-# ── base: OpenModelica build dependencies only ────────────────────────
+# ── base: OpenModelica build dependencies only ────────────────────────────────
 FROM ubuntu:${UBUNTU_VERSION} AS base
 
 # Image / OCI metadata (inherited by the stages built FROM this one)
@@ -87,7 +87,7 @@ RUN pip install --no-cache-dir \
   && pip install --no-cache-dir -r \
     https://raw.githubusercontent.com/OpenModelica/OpenModelica/9c0dc9a8ab50ba652109584cb3fecaef86640b66/doc/UsersGuide/source/requirements.txt
 
-# ── full: the published base image ───────────────────────────────────
+# ── full: the published base image ────────────────────────────────────────────
 #   - tools to build the User's Guide (common to all Ubuntu versions)
 #   - Qt5/Qt6 packages (version-specific: Jammy ships an older Qt6 that lacks
 #     some packages available on 24.04+, so the set is chosen from VERSION_ID)
@@ -167,7 +167,7 @@ RUN apt-get update \
 COPY --from=venv /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# ── cmake-4 add-on: full + CMake 4 from the official Kitware release ──
+# ── cmake-4 add-on: full + CMake 4 from the official Kitware release ──────────
 # Overrides any apt-provided cmake. Built with `--target cmake-4`.
 FROM full AS cmake-4
 LABEL org.opencontainers.image.description="OpenModelica build-deps (Ubuntu) with CMake 4"
