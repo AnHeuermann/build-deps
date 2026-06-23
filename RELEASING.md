@@ -126,10 +126,10 @@ to the entry first, or split that Dockerfile into stages the same way.
 ## Arch / rolling snapshots
 
 Arch has no version number. The moving tag `arch-rolling` always tracks the
-latest build. For a reproducible pin, release with a date-stamped semver-like
-tag, e.g. `arch-rolling-2026.06.01` — but note the publish workflows expect a
-`MAJOR.MINOR.PATCH` semver suffix, so use `YYYY.MM.DD` (which is valid semver)
-as the `<semver>` component.
+latest build. For a reproducible pin, release with a date-stamped tag,
+e.g. `arch-rolling-2026.6.1` — the publish workflows match a `\d+\.\d+\.\d+`
+suffix, so use `YYYY.M.D` (without padding, e.g. `2026.6.1` not `2026.06.01`):
+SemVer 2.0.0 forbids leading zeros in numeric identifiers.
 
 [ci-matrix]: ./.ci/matrix.yml
 [build-yml]: ./.github/workflows/build.yml

@@ -58,7 +58,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build base image and add-ons
         env:
@@ -114,16 +114,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Validate tag
+          python .ci/matrix.py image "${GITHUB_REF_NAME}" >/dev/null
           # Per-image releases are never marked as the repository "latest":
           # there is no single newest image in the monorepo.
-          if gh release view "${{ github.ref_name }}" &>/dev/null; then
-            gh release edit "${{ github.ref_name }}" \
-              --title "${{ github.ref_name }}" \
+          if gh release view "${GITHUB_REF_NAME}" &>/dev/null; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
               --generate-notes \
               --latest=false
           else
-            gh release create "${{ github.ref_name }}" \
-              --title "${{ github.ref_name }}" \
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
               --generate-notes \
               --verify-tag \
               --latest=false
@@ -153,7 +155,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Install dependencies
         run: pip install pyyaml
@@ -177,7 +179,7 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(python .ci/matrix.py image "${TAG}")"
-          CERT_ID="https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }}"
+          CERT_ID="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}"
           CERT_ISSUER="https://token.actions.githubusercontent.com"
           tags=("${base_tag}" "${base_tag}-${semver}")
           for addon in ${addons}; do
@@ -211,7 +213,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Install dependencies
         run: pip install pyyaml

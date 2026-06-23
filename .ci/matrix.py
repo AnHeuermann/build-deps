@@ -39,6 +39,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import sys
 
 import yaml
@@ -97,14 +98,14 @@ def cmd_image(tag: str):
 
     for img in load_images():
         if img["base_tag"] == prefix:
-            print(f"dir='{img['dir']}'")
-            print(f"base_tag='{img['base_tag']}'")
-            print(f"semver='{semver}'")
-            print(f"context='{img['context']}'")
-            print(f"dockerfile='{img['dockerfile']}'")
-            print(f"target='{img['target']}'")
-            print(f"build_args='{img['build_args']}'")
-            print(f"addons='{img['addons']}'")
+            print(f"dir={shlex.quote(img['dir'])}")
+            print(f"base_tag={shlex.quote(img['base_tag'])}")
+            print(f"semver={shlex.quote(semver)}")
+            print(f"context={shlex.quote(img['context'])}")
+            print(f"dockerfile={shlex.quote(img['dockerfile'])}")
+            print(f"target={shlex.quote(img['target'])}")
+            print(f"build_args={shlex.quote(img['build_args'])}")
+            print(f"addons={shlex.quote(img['addons'])}")
             return
 
     valid = ", ".join(img["base_tag"] for img in load_images())
