@@ -1,37 +1,230 @@
-name: Build Docker Image
+name: Build, Release & Publish
+
+# Single pipeline so a release created here can trigger publishing in the SAME
+# run. (A GitHub Release created with GITHUB_TOKEN does NOT trigger other
+# workflows, which is why release + publish must live together.)
+#
+#   discover ─▶ build (all images, no push)
+#                 └─▶ release (tag only) ─▶ publish-ghcr + publish-nexus
+#
+# Release/publish are keyed on image tags: <os>-<version>-<semver>,
+# e.g. ubuntu-24.04-2.1.0.
 
 on:
   push:
     branches:
       - main
-      - 'releases/**'
     tags:
-      - v*
+      - '*-*.*.*'
   pull_request:
     branches:
       - main
-      - 'releases/**'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to (re)publish (e.g. ubuntu-24.04-2.1.0)'
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: Build Dockerfile
+  discover:
+    name: Discover images
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
     steps:
       - name: Check out the repo
         uses: actions/checkout@v7.0.0
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/openmodelica/build-deps
+      - name: Install dependencies
+        run: pip install pyyaml
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v7
+      - name: Compute build matrix
+        id: set
+        run: echo "matrix=$(python .ci/matrix.py all)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.image.os }}-${{ matrix.image.version }}
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build base image and add-ons
+        env:
+          BASE_TAG: ${{ matrix.image.base_tag }}
+          CONTEXT: ${{ matrix.image.context }}
+          DOCKERFILE: ${{ matrix.image.dockerfile }}
+          TARGET: ${{ matrix.image.target }}
+          BUILD_ARGS: ${{ matrix.image.build_args }}
+          ADDONS: ${{ matrix.image.addons }}
+        run: |
+          set -euo pipefail
+
+          # Common build-args (e.g. UBUNTU_VERSION) apply to every stage.
+          common_args=()
+          for kv in ${BUILD_ARGS}; do common_args+=(--build-arg "${kv}"); done
+
+          # Base image: the image's `target` stage (or the final stage).
+          base_target_arg=()
+          [ -n "${TARGET}" ] && base_target_arg=(--target "${TARGET}")
+          echo "::group::Building base ${BASE_TAG}"
+          docker buildx build \
+            --file "${DOCKERFILE}" \
+            "${common_args[@]}" "${base_target_arg[@]}" \
+            --tag "local/build-deps:${BASE_TAG}" \
+            --load \
+            "${CONTEXT}"
+          echo "::endgroup::"
+
+          # Add-ons: each is a --target stage in the same Dockerfile.
+          for addon in ${ADDONS}; do
+            echo "::group::Building add-on ${addon}"
+            docker buildx build \
+              --file "${DOCKERFILE}" \
+              "${common_args[@]}" --target "${addon}" \
+              --tag "local/build-deps:${BASE_TAG}-${addon}" \
+              --load \
+              "${CONTEXT}"
+            echo "::endgroup::"
+          done
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7.0.0
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Per-image releases are never marked as the repository "latest":
+          # there is no single newest image in the monorepo.
+          if gh release view "${{ github.ref_name }}" &>/dev/null; then
+            gh release edit "${{ github.ref_name }}" \
+              --title "${{ github.ref_name }}" \
+              --generate-notes \
+              --latest=false
+          else
+            gh release create "${{ github.ref_name }}" \
+              --title "${{ github.ref_name }}" \
+              --generate-notes \
+              --verify-tag \
+              --latest=false
+          fi
+
+  publish-ghcr:
+    name: Publish to GHCR
+    needs: [build, release]
+    # Runs on a release tag (after release succeeds) or on a manual re-publish
+    # dispatch (where the release job is skipped).
+    if: >-
+      ${{ always()
+        && needs.build.result == 'success'
+        && (needs.release.result == 'success' || needs.release.result == 'skipped')
+        && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # needed for signing the images with GitHub OIDC Token
+    env:
+      REGISTRY: ghcr.io/openmodelica/build-deps
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4.2.0
         with:
-          context: .
-          file: ./Dockerfile
-          tags: ${{ steps.meta.outputs.tags }}
-          annotations: ${{ steps.meta.outputs.annotations }}
-          push: false
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build, push and sign image (base + add-ons)
+        env:
+          SIGN: "true"
+        run: ./.ci/publish.sh
+
+      - name: Verify signatures
+        run: |
+          set -euo pipefail
+          eval "$(python .ci/matrix.py image "${TAG}")"
+          CERT_ID="https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }}"
+          CERT_ISSUER="https://token.actions.githubusercontent.com"
+          tags=("${base_tag}" "${base_tag}-${semver}")
+          for addon in ${addons}; do
+            tags+=("${base_tag}-${addon}" "${base_tag}-${addon}-${semver}")
+          done
+          for t in "${tags[@]}"; do
+            echo "Verifying ${REGISTRY}:${t}"
+            cosign verify \
+              --certificate-identity="${CERT_ID}" \
+              --certificate-oidc-issuer="${CERT_ISSUER}" \
+              "${REGISTRY}:${t}"
+          done
+
+  publish-nexus:
+    name: Publish to Nexus
+    needs: [build, release]
+    if: >-
+      ${{ always()
+        && needs.build.result == 'success'
+        && (needs.release.result == 'success' || needs.release.result == 'skipped')
+        && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      REGISTRY: docker.openmodelica.org/build-deps
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Login to Nexus Docker registry
+        uses: docker/login-action@v4.2.0
+        with:
+          registry: docker.openmodelica.org
+          username: ${{ secrets.NEXUS_OPENMODELICABOT_USER }}
+          password: ${{ secrets.NEXUS_OPENMODELICABOT_PASSWORD }}
+
+      - name: Build and push image (base + add-ons)
+        env:
+          SIGN: "false"
+        run: ./.ci/publish.sh

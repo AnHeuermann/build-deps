@@ -1,0 +1,87 @@
+# Declares every image this repository builds.
+#
+# Each entry is one OS / OS-version. Every OS uses a single multi-stage
+# Dockerfile at <os>/Dockerfile (e.g. ubuntu/Dockerfile) covering all of its
+# versions: the base image is the `full` stage and add-ons are extra stages.
+#
+# Per-image fields:
+#   context     build context directory  (default: <os>/<version>/base)
+#   dockerfile  path to the Dockerfile  (default: <context>/Dockerfile)
+#   build_args  map of --build-arg values, e.g. the version (default: none)
+#   target      build stage for the BASE image (default: final stage)
+#   addons      list of add-ons. Each add-on is a build STAGE (--target) in the
+#               image's own Dockerfile (default: none)
+# The shared-Dockerfile images set context/dockerfile/target explicitly (e.g.
+# all Ubuntu versions use ubuntu/Dockerfile and differ only by UBUNTU_VERSION;
+# the base is the `full` stage and add-ons such as `cmake-4` are extra stages).
+#
+# Tag grammar (see README.md):
+#   base  moving    : <os>-<version>                     e.g. ubuntu-24.04
+#   base  immutable : <os>-<version>-<semver>            e.g. ubuntu-24.04-2.1.0
+#   addon moving    : <os>-<version>-<addon>             e.g. ubuntu-24.04-cmake-4
+#   addon immutable : <os>-<version>-<addon>-<semver>    e.g. ubuntu-24.04-cmake-4-2.1.0
+#
+# <semver> is THIS repository's version (the recipe), independent of the
+# OpenModelica version. Pushing the git tag `<os>-<version>-<semver>` releases
+# the base image and all of its add-ons (see RELEASING.md).
+
+images:
+  # All Ubuntu versions share the multi-stage ubuntu/Dockerfile; only
+  # UBUNTU_VERSION differs. The base image is the `full` stage; add-ons are
+  # further stages (e.g. `cmake-4`).
+  - os: ubuntu
+    version: "26.04"
+    context: ubuntu
+    dockerfile: ubuntu/Dockerfile
+    target: full
+    build_args:
+      UBUNTU_VERSION: "26.04"
+    addons: []
+
+  - os: ubuntu
+    version: "24.04"
+    context: ubuntu
+    dockerfile: ubuntu/Dockerfile
+    target: full
+    build_args:
+      UBUNTU_VERSION: "24.04"
+    addons:
+      - cmake-4
+
+  - os: ubuntu
+    version: "22.04"
+    context: ubuntu
+    dockerfile: ubuntu/Dockerfile
+    target: full
+    build_args:
+      UBUNTU_VERSION: "22.04"
+    addons: []
+
+  # Placeholders — not implemented yet (see <os>/Dockerfile). Each OS uses the
+  # same single multi-stage Dockerfile layout as Ubuntu. Uncomment and flesh out
+  # once the corresponding Dockerfile is real, so CI starts building them.
+  #
+  # - os: debian
+  #   version: "13"
+  #   context: debian
+  #   dockerfile: debian/Dockerfile
+  #   target: full
+  #   build_args:
+  #     DEBIAN_VERSION: "13"
+  #   addons: []
+  #
+  # - os: almalinux
+  #   version: "9"
+  #   context: almalinux
+  #   dockerfile: almalinux/Dockerfile
+  #   target: full
+  #   build_args:
+  #     ALMALINUX_VERSION: "9"
+  #   addons: []
+  #
+  # - os: arch
+  #   version: "rolling"
+  #   context: arch
+  #   dockerfile: arch/Dockerfile
+  #   target: full
+  #   addons: []
