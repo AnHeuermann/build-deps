@@ -36,7 +36,8 @@ images:
     target: full
     build_args:
       UBUNTU_VERSION: "26.04"
-    addons: []
+    addons:
+      - rust
 
   - os: ubuntu
     version: "24.04"

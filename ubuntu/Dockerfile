@@ -30,21 +30,20 @@ ARG UBUNTU_VERSION=26.04
 FROM ubuntu:${UBUNTU_VERSION} AS base
 
 # Image / OCI metadata (inherited by the stages built FROM this one)
-LABEL maintainer="AnHeuermann"
-LABEL description="OpenModelica build-deps Docker Image"
-LABEL organization="OpenModelica"
+LABEL maintainer="AnHeuermann" \
+      description="OpenModelica build-deps Docker Image" \
+      organization="OpenModelica"
 
-LABEL org.opencontainers.image.vendor="OpenModelica"
-LABEL org.opencontainers.image.authors="AnHeuermann"
-LABEL org.opencontainers.image.description="OpenModelica build-deps base image (Ubuntu)"
-LABEL org.opencontainers.image.source="https://github.com/OpenModelica/build-deps"
-LABEL org.opencontainers.image.license="MIT"
+LABEL org.opencontainers.image.vendor="OpenModelica" \
+      org.opencontainers.image.authors="AnHeuermann" \
+      org.opencontainers.image.description="OpenModelica build-deps base image (Ubuntu)" \
+      org.opencontainers.image.source="https://github.com/OpenModelica/build-deps" \
+      org.opencontainers.image.license="MIT"
 
-ENV SHELL=/bin/bash
-# Set locale (inherited by later stages)
-ENV LANGUAGE=en_US:en
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
+ENV SHELL=/bin/bash \
+    LANGUAGE=en_US:en \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 # Ensure DEBIAN_FRONTEND is only set during build
 ARG DEBIAN_FRONTEND=noninteractive
@@ -91,6 +90,62 @@ RUN pip install --no-cache-dir \
     svgwrite \
   && pip install --no-cache-dir -r \
     https://raw.githubusercontent.com/OpenModelica/OpenModelica/9c0dc9a8ab50ba652109584cb3fecaef86640b66/doc/UsersGuide/source/requirements.txt
+
+# ── rustdeps: Dependencies for the Rust build ─────────────────
+# Built once and copied into `rust`.
+FROM base AS rustdeps
+RUN apt-get update \
+  && apt-get install --no-install-recommends -qy python3-pip python3-venv curl \
+  && rm -rf /var/lib/apt/lists/*
+
+# Specific versions needed for caching Rust crates
+ARG WASM_BINDGEN_VERSION="0.2.125"
+ARG RUST_NIGHTLY="nightly-2026-05-31"
+
+ENV RUSTUP_HOME=/opt/rust/rustup \
+  CARGO_HOME=/opt/rust/cargo \
+  XWIN_CACHE_DIR=/opt/cargo-xwin
+
+# Install Rust
+RUN curl https://sh.rustup.rs | bash -s -- -y \
+      --profile minimal \
+      --default-toolchain "${RUST_NIGHTLY}" \
+      --target x86_64-pc-windows-msvc \
+      --target aarch64-pc-windows-msvc \
+      --target wasm32-unknown-unknown && \
+    . "$CARGO_HOME/env" && \
+    which cargo && cargo --version && \
+    rustup component add rustc-codegen-cranelift-preview clippy rustfmt && \
+    cargo install wasm-bindgen-cli --version "${WASM_BINDGEN_VERSION}" && \
+    cargo install sccache --locked && \
+    cargo install cargo-nextest --locked && \
+    cargo install wasm-opt && \
+    cargo install --locked cargo-xwin && \
+    cargo xwin cache xwin \
+      --xwin-arch x86_64,aarch64 && \
+    rm -rf "$CARGO_HOME/registry" "$CARGO_HOME/git" \
+           "$CARGO_HOME/.package-cache" \
+           "$HOME/.rustup/downloads" "$HOME/.rustup/tmp" \
+           "${CARGO_TARGET_DIR:-/nonexistent}" && \
+    mkdir -p "$CARGO_HOME/registry" && chmod ugo+rwx -R /opt/rust
+
+RUN export DEBIAN_FRONTEND=noninteractive && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git python3 python3-pip python3-venv ca-certificates xz-utils && \
+    # --- Emscripten 4.0.7 (required by Qt 6.10.x; Ubuntu has 3.1.69) ---
+    git clone --depth 1 https://github.com/emscripten-core/emsdk.git /opt/emsdk; \
+    cd /opt/emsdk && \
+    ./emsdk install 4.0.7 && \
+    ./emsdk activate 4.0.7 && \
+    # --- Qt 6.10.2: WebAssembly (single-threaded) + matching 26.04 host ---
+    python3 -m pip install --no-cache-dir --break-system-packages aqtinstall && \
+    aqt install-qt linux desktop 6.10.2 linux_gcc_64    -O /opt/Qt && \
+    aqt install-qt all_os wasm 6.10.2 wasm_singlethread -m qt5compat -O /opt/Qt && \
+    rm -rf /var/lib/apt/lists/* && \
+    chmod +x /opt/Qt/6.10.2/wasm_singlethread/bin/qt-cmake \
+         /opt/Qt/6.10.2/wasm_singlethread/bin/qt-cmake-create \
+         /opt/Qt/6.10.2/wasm_singlethread/bin/qt-configure-module
 
 # ── full: the published base image ────────────────────────────────────────────
 #   - tools to build the User's Guide (common to all Ubuntu versions)
@@ -201,5 +256,25 @@ RUN apt-get update \
     gdb \
     linux-tools-generic \
     valgrind \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM full AS rust
+LABEL org.opencontainers.image.description="OpenModelica build-deps (Ubuntu) for the Rust targets"
+
+ENV EMSDK=/opt/emsdk \
+  QT_HOST_PATH=/opt/Qt/6.10.2/gcc_64 \
+  RUSTUP_HOME=/opt/rust/rustup \
+  CARGO_HOME=/opt/rust/cargo \
+  XWIN_CACHE_DIR=/opt/cargo-xwin \
+  PATH=/opt/emsdk:/opt/emsdk/upstream/emscripten:/opt/Qt/6.10.2/wasm_singlethread/bin:/opt/rust/cargo/bin:$PATH
+
+COPY --from=rustdeps /opt/emsdk /opt/emsdk
+COPY --from=rustdeps /opt/Qt /opt/Qt
+COPY --from=rustdeps /opt/rust /opt/rust
+
+RUN export DEBIAN_FRONTEND=noninteractive && apt-get update \
+  && apt-get install -qy \
+    mold \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
