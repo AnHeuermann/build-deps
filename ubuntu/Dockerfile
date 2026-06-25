@@ -140,8 +140,9 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
     ./emsdk activate 4.0.7 && \
     # --- Qt 6.10.2: WebAssembly (single-threaded) + matching 26.04 host ---
     python3 -m pip install --no-cache-dir --break-system-packages aqtinstall && \
-    aqt install-qt linux desktop 6.10.2 linux_gcc_64    -O /opt/Qt && \
-    aqt install-qt all_os wasm 6.10.2 wasm_singlethread -m qt5compat -O /opt/Qt && \
+    aqt install-qt linux desktop 6.10.2 linux_gcc_64 -m qtquick3d qtshadertools -O /opt/Qt && \
+    aqt install-qt all_os wasm 6.10.2 wasm_singlethread -m qt5compat qtquick3d qtshadertools -O /opt/Qt && \
+    aqt install-qt windows desktop 6.10.2 win64_msvc2022_64 -m qtquick3d qtshadertools -O /opt/Qt && \
     rm -rf /var/lib/apt/lists/* && \
     chmod +x /opt/Qt/6.10.2/wasm_singlethread/bin/qt-cmake \
          /opt/Qt/6.10.2/wasm_singlethread/bin/qt-cmake-create \
