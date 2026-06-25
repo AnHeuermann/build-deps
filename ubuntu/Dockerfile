@@ -132,7 +132,7 @@ RUN curl https://sh.rustup.rs | bash -s -- -y \
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        git python3 python3-pip python3-venv ca-certificates xz-utils && \
+        git python3 python3-pip python3-venv ca-certificates xz-utils flang llvm && \
     # --- Emscripten 4.0.7 (required by Qt 6.10.x; Ubuntu has 3.1.69) ---
     git clone --depth 1 https://github.com/emscripten-core/emsdk.git /opt/emsdk; \
     cd /opt/emsdk && \
