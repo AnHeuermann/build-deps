@@ -278,6 +278,7 @@ COPY --from=rustdeps /opt/rust /opt/rust
 
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get update \
   && apt-get install -qy \
+    wine \
     mold \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
