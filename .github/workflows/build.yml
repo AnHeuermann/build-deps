@@ -1,37 +1,285 @@
-name: Build Docker Image
+name: Build, Release & Publish
+
+# Single pipeline so a release created here can trigger publishing in the SAME
+# run.
+#
+#   discover ─▶ build (all images, no push)
+#                 └─▶ release (tag only) ─▶ publish-ghcr + publish-nexus
+#
+# A single repo-wide semver tag (e.g. v2.1.0) releases ALL images at once.
+# The per-image Docker tags (e.g. ubuntu-24.04-2.1.0) are synthesized from it.
+#
+# Triggers:
+#   schedule        Weekly rolling rebuild (Sunday night → Monday 03:30 UTC).
+#                   Publishes every image with a date-based immutable tag
+#                   (YYYY.MM.DD) in addition to the moving tag, without creating
+#                   a GitHub Release.
+#   push tag        Full release: GitHub Release + immutable semver tags for
+#                   all images. Tag must be of the form v<MAJOR>.<MINOR>.<PATCH>.
+#   push main       Publishes every image with a moving `-main` tag.
+#   workflow_dispatch Re-publish on demand: global tag (e.g. v2.1.0) rebuilds
+#                   all images; a single image tag (e.g. ubuntu-24.04-2.1.0)
+#                   rebuilds just that image.
 
 on:
+  schedule:
+    - cron: '30 3 * * 1'   # Monday 03:30 UTC — Sunday-night rolling rebuild
   push:
     branches:
       - main
-      - 'releases/**'
     tags:
-      - v*
+      - 'v[0-9]*.[0-9]*.[0-9]*'
   pull_request:
     branches:
       - main
-      - 'releases/**'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version to (re)publish: global tag (e.g. v2.1.0) rebuilds all images; single image tag (e.g. ubuntu-24.04-2.1.0) rebuilds one'
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: Build Dockerfile
+  discover:
+    name: Discover images
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+      publish_matrix: ${{ steps.publish_tags.outputs.matrix }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/openmodelica/build-deps
+      - name: Install dependencies
+        run: pip install -r .ci/requirements.txt
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v7
+      - name: Compute build matrix
+        id: set
+        run: echo "matrix=$(python .ci/matrix.py all)" >> "$GITHUB_OUTPUT"
+
+      - name: Compute publish matrix
+        id: publish_tags
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          GH_REF: ${{ github.ref }}
+          GH_REF_NAME: ${{ github.ref_name }}
+        run: |
+          case "${EVENT_NAME}" in
+            schedule)
+              DATE=$(date +%Y.%m.%d)
+              echo "matrix=$(python3 .ci/matrix.py publish-matrix "${DATE}")" >> "$GITHUB_OUTPUT"
+              ;;
+            workflow_dispatch)
+              if [[ "${INPUT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "matrix=$(python3 .ci/matrix.py publish-matrix "${INPUT_TAG#v}")" >> "$GITHUB_OUTPUT"
+              else
+                python3 .ci/matrix.py image "${INPUT_TAG}" > /dev/null
+                echo "matrix=$(python3 -c "import json,sys; print(json.dumps([{'tag':sys.argv[1]}],separators=(',',':')))" "${INPUT_TAG}")" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            push)
+              if [[ "${GH_REF}" == refs/tags/v* ]]; then
+                echo "matrix=$(python3 .ci/matrix.py publish-matrix "${GH_REF_NAME#v}")" >> "$GITHUB_OUTPUT"
+              elif [[ "${GH_REF}" == refs/heads/main ]]; then
+                echo "matrix=$(python3 .ci/matrix.py publish-matrix main)" >> "$GITHUB_OUTPUT"
+              else
+                echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            *)
+              echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+  build:
+    name: Build ${{ matrix.image.os }}-${{ matrix.image.version }}
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build base image and add-ons
+        env:
+          BASE_TAG: ${{ matrix.image.base_tag }}
+          CONTEXT: ${{ matrix.image.context }}
+          DOCKERFILE: ${{ matrix.image.dockerfile }}
+          TARGET: ${{ matrix.image.target }}
+          BUILD_ARGS: ${{ matrix.image.build_args }}
+          ADDONS: ${{ matrix.image.addons }}
+        run: |
+          set -euo pipefail
+
+          # Common build-args (e.g. UBUNTU_VERSION) apply to every stage.
+          common_args=()
+          for kv in ${BUILD_ARGS}; do common_args+=(--build-arg "${kv}"); done
+
+          # Base image: the image's `target` stage (or the final stage).
+          base_target_arg=()
+          [ -n "${TARGET}" ] && base_target_arg=(--target "${TARGET}")
+          echo "::group::Building base ${BASE_TAG}"
+          docker buildx build \
+            --file "${DOCKERFILE}" \
+            "${common_args[@]}" "${base_target_arg[@]}" \
+            --tag "local/build-deps:${BASE_TAG}" \
+            --load \
+            "${CONTEXT}"
+          echo "::endgroup::"
+
+          # Add-ons: each is a --target stage in the same Dockerfile.
+          for addon in ${ADDONS}; do
+            echo "::group::Building add-on ${addon}"
+            docker buildx build \
+              --file "${DOCKERFILE}" \
+              "${common_args[@]}" --target "${addon}" \
+              --tag "local/build-deps:${BASE_TAG}-${addon}" \
+              --load \
+              "${CONTEXT}"
+            echo "::endgroup::"
+          done
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Validate tag format: must be v<MAJOR>.<MINOR>.<PATCH>
+          echo "${GITHUB_REF_NAME}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' || \
+            { echo "error: tag must be of the form v<semver> (e.g. v2.1.0)"; exit 1; }
+          if gh release view "${GITHUB_REF_NAME}" &>/dev/null; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}"
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes \
+              --verify-tag
+          fi
+
+  publish-ghcr:
+    name: Publish ${{ matrix.image.tag }} to GHCR
+    needs: [discover, build, release]
+    # Runs on: a release tag, a manual re-publish dispatch, or the weekly schedule.
+    # publish_matrix is [] for PR and branch-push runs, so those are excluded.
+    if: >-
+      ${{ always()
+        && needs.build.result == 'success'
+        && (needs.release.result == 'success' || needs.release.result == 'skipped')
+        && needs.discover.outputs.publish_matrix != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # needed for signing the images with GitHub OIDC Token
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.discover.outputs.publish_matrix) }}
+    env:
+      REGISTRY: ghcr.io/openmodelica/build-deps
+      TAG: ${{ matrix.image.tag }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Install dependencies
+        run: pip install -r .ci/requirements.txt
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4.2.0
         with:
-          context: .
-          file: ./Dockerfile
-          tags: ${{ steps.meta.outputs.tags }}
-          annotations: ${{ steps.meta.outputs.annotations }}
-          push: false
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build, push and sign image (base + add-ons)
+        env:
+          SIGN: "true"
+        run: ./.ci/publish.sh
+
+      - name: Verify signatures
+        run: |
+          set -euo pipefail
+          eval "$(python .ci/matrix.py image "${TAG}")"
+          CERT_ID="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}"
+          CERT_ISSUER="https://token.actions.githubusercontent.com"
+          tags=("${base_tag}" "${base_tag}-${semver}")
+          for addon in ${addons}; do
+            tags+=("${base_tag}-${addon}" "${base_tag}-${addon}-${semver}")
+          done
+          for t in "${tags[@]}"; do
+            echo "Verifying ${REGISTRY}:${t}"
+            cosign verify \
+              --certificate-identity="${CERT_ID}" \
+              --certificate-oidc-issuer="${CERT_ISSUER}" \
+              "${REGISTRY}:${t}"
+          done
+
+  publish-nexus:
+    name: Publish ${{ matrix.image.tag }} to Nexus
+    needs: [discover, build, release]
+    if: >-
+      ${{ always()
+        && needs.build.result == 'success'
+        && (needs.release.result == 'success' || needs.release.result == 'skipped')
+        && needs.discover.outputs.publish_matrix != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.discover.outputs.publish_matrix) }}
+    env:
+      REGISTRY: docker.openmodelica.org/build-deps
+      TAG: ${{ matrix.image.tag }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Install dependencies
+        run: pip install -r .ci/requirements.txt
+
+      - name: Login to Nexus Docker registry
+        uses: docker/login-action@v4.2.0
+        with:
+          registry: docker.openmodelica.org
+          username: ${{ secrets.NEXUS_OPENMODELICABOT_USER }}
+          password: ${{ secrets.NEXUS_OPENMODELICABOT_PASSWORD }}
+
+      - name: Build and push image (base + add-ons)
+        env:
+          SIGN: "false"
+        run: ./.ci/publish.sh

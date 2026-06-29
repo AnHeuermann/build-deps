@@ -1,0 +1,113 @@
+# Declares every image this repository builds.
+#
+# Each entry is one OS / OS-version. Ubuntu and Debian use the shared
+# multi-stage apt/Dockerfile; the base image is the `full` stage and add-ons
+# are further stages (e.g. `cmake-4`).
+#
+# Per-image fields:
+#   context     build context directory  (default: <os>/<version>/base)
+#   dockerfile  path to the Dockerfile  (default: <context>/Dockerfile)
+#   build_args  map of --build-arg values, e.g. the version (default: none)
+#   target      build stage for the BASE image (default: final stage)
+#   addons      list of add-ons. Each add-on is a build STAGE (--target) in the
+#               image's own Dockerfile (default: none)
+# Ubuntu and Debian share apt/Dockerfile and differ only by DISTRO and VERSION;
+# the base is the `full` stage and add-ons such as `cmake-4` are extra stages.
+#
+# Tag grammar (see README.md):
+#   base  moving    : <os>-<version>                     e.g. ubuntu-24.04
+#   base  immutable : <os>-<version>-<semver>            e.g. ubuntu-24.04-2.1.0
+#   addon moving    : <os>-<version>-<addon>             e.g. ubuntu-24.04-cmake-4
+#   addon immutable : <os>-<version>-<addon>-<semver>    e.g. ubuntu-24.04-cmake-4-2.1.0
+#
+# <semver> is THIS repository's version (the recipe), independent of the
+# OpenModelica version. Pushing the git tag `<os>-<version>-<semver>` releases
+# the base image and all of its add-ons (see RELEASING.md).
+
+images:
+  # Ubuntu and Debian share apt/Dockerfile; only DISTRO and VERSION differ.
+  # The base image is the `full` stage; add-ons are further stages.
+
+  - os: ubuntu
+    version: "26.04"
+    context: apt
+    dockerfile: apt/Dockerfile
+    target: full
+    build_args:
+      DISTRO: ubuntu
+      VERSION: "26.04"
+    addons:
+      - rust
+      - cmake-4
+      - debug
+
+  - os: ubuntu
+    version: "24.04"
+    context: apt
+    dockerfile: apt/Dockerfile
+    target: full
+    build_args:
+      DISTRO: ubuntu
+      VERSION: "24.04"
+    addons:
+      - cmake-4
+      - debug
+
+  - os: ubuntu
+    version: "22.04"
+    context: apt
+    dockerfile: apt/Dockerfile
+    target: full
+    build_args:
+      DISTRO: ubuntu
+      VERSION: "22.04"
+    addons:
+      - debug
+
+  - os: debian
+    version: "13"
+    context: apt
+    dockerfile: apt/Dockerfile
+    target: full
+    build_args:
+      DISTRO: debian
+      VERSION: "13"
+      INTEL_OCL_PKGS: ""
+    addons:
+      - cmake-4
+      - debug
+
+  - os: debian
+    version: "12"
+    context: apt
+    dockerfile: apt/Dockerfile
+    target: full
+    build_args:
+      DISTRO: debian
+      VERSION: "12"
+    addons:
+      - cmake-4
+      - debug
+
+  # Placeholders — not implemented yet. Uncomment and flesh out once the
+  # corresponding Dockerfile is real, so CI starts building them.
+  #
+  # RPM-based distros (Fedora, AlmaLinux, Rocky Linux, RHEL) will share
+  # rpm/Dockerfile — see that file for details.
+  #
+  # - os: fedora
+  #   version: "42"
+  #   context: rpm
+  #   dockerfile: rpm/Dockerfile
+  #   target: full
+  #   build_args:
+  #     DISTRO: fedora
+  #     VERSION: "42"
+  #   addons: []
+  #
+  # - os: arch
+  #   version: "rolling"
+  #   context: pacman
+  #   dockerfile: pacman/Dockerfile
+  #   target: full
+  #   addons: []
