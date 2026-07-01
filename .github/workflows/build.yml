@@ -239,6 +239,41 @@ jobs:
               "${REGISTRY}:${t}"
           done
 
+  cleanup-ghcr:
+    name: Prune stale GHCR versions
+    needs: [discover, publish-ghcr]
+    # Runs after a publish (release / manual / weekly rolling rebuild), which is
+    # exactly when rolling tags move and leave orphaned digests + signatures.
+    if: >-
+      ${{ always()
+        && needs.publish-ghcr.result == 'success'
+        && needs.discover.outputs.publish_matrix != '[]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.7
+
+      # Writes ~/.docker/config.json so crane can read manifests from the
+      # package (needed if it is private; harmless if public).
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prune untagged versions and orphaned signatures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: true
+        run: python3 .ci/cleanup-ghcr.py
+
   publish-nexus:
     name: Publish ${{ matrix.image.tag }} to Nexus
     needs: [discover, build, release]
