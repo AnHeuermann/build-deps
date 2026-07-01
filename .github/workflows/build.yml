@@ -200,10 +200,14 @@ jobs:
           CERT_ID="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}"
           CERT_ISSUER="https://token.actions.githubusercontent.com"
           tags=("${base_tag}")
-          [[ -n "${semver}" ]] && tags+=("${base_tag}-${semver}")
+          if [[ -n "${semver}" ]]; then
+            tags+=("${base_tag}-${semver}")
+          fi
           for addon in ${addons}; do
             tags+=("${base_tag}-${addon}")
-            [[ -n "${semver}" ]] && tags+=("${base_tag}-${addon}-${semver}")
+            if [[ -n "${semver}" ]]; then
+              tags+=("${base_tag}-${addon}-${semver}")
+            fi
           done
           for t in "${tags[@]}"; do
             echo "Verifying ${REGISTRY}:${t}"

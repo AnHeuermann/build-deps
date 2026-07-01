@@ -31,7 +31,9 @@ build_and_push() {
   local moving="$1" immutable="$2"
   shift 2
   local tag_args=(--tag "${REGISTRY}:${moving}")
-  [[ -n "${immutable}" ]] && tag_args+=(--tag "${REGISTRY}:${immutable}")
+  if [[ -n "${immutable}" ]]; then
+    tag_args+=(--tag "${REGISTRY}:${immutable}")
+  fi
   echo "::group::Building ${moving}"
   docker buildx build \
     --pull \
@@ -43,7 +45,9 @@ build_and_push() {
     "${context}"
   echo "::endgroup::"
   PUSHED_TAGS+=("${REGISTRY}:${moving}")
-  [[ -n "${immutable}" ]] && PUSHED_TAGS+=("${REGISTRY}:${immutable}")
+  if [[ -n "${immutable}" ]]; then
+    PUSHED_TAGS+=("${REGISTRY}:${immutable}")
+  fi
 }
 
 # Common build-args (e.g. UBUNTU_VERSION) apply to every stage.
@@ -54,7 +58,9 @@ done
 
 # 1. Base image: the image's `target` stage (or the final stage).
 base_target_arg=()
-[ -n "${target}" ] && base_target_arg=(--target "${target}")
+if [[ -n "${target}" ]]; then
+  base_target_arg=(--target "${target}")
+fi
 build_and_push "${base_tag}" "${semver:+${base_tag}-${semver}}" \
   "${common_args[@]}" "${base_target_arg[@]}"
 
